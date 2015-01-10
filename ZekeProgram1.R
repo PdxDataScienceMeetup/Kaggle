@@ -1,5 +1,28 @@
+#This script assumes that a dataset is loaded into td.  It was written using the Titanic dataset from Kaggle
+#you should be able to use your own dataset fairly easily, so the code to read in a dataset is commented out.
+#But, it's there for you should you want an example.
+
+
 library(pROC)
 require(pROC)
+
+
+#train.column.types <- c('integer',   # PassengerId
+#                        'factor',    # Survived 
+#                        'factor',    # Pclass
+#                        'character', # Name
+#                        'factor',    # Sex
+#                        'numeric',   # Age
+#                        'integer',   # SibSp
+#                        'integer',   # Parch
+#                        'character', # Ticket
+#                        'numeric',   # Fare
+#                        'character', # Cabin
+#                        'factor'     # Embarked
+#)
+#trainData <- read.csv("train.csv", header=TRUE, colClasses=train.column.types, na.strings=c("NA", "") )
+#trainData -> td
+
 
 names(td)
 cv.glm<-function (f, data, numberOfFolds=10)
