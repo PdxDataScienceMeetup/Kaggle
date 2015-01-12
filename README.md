@@ -1,4 +1,4 @@
 Kaggle
 ======
 
-Contains all Kaggle meetup documents: tutorials, examples etc.
+Contains all Kaggle meetup documents: tutorials, examples, code etc.
