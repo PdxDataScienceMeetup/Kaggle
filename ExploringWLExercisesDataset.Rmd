@@ -1,0 +1,167 @@
+---
+title: "Exploration of the Weight Lifting Exercises Dataset"
+author: "Kinga"
+date: "Wednesday, February 11, 2015"
+output:
+  html_document:
+    fig_height: 8
+    fig_width: 7.5
+---
+
+##Getting the Data
+The data source for this project is from: http://groupware.les.inf.puc-rio.br/har.
+
+Reading in the  training dataset that was downloaded from https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv:
+
+```{r}
+training <- read.csv("pml-training.csv")
+attach(training) #attaching data frame to reduce the length of the variable names associated to it. 
+
+```
+
+
+
+##Preprocessing the Data
+
+
+The first 7 variables in the training data set are:
+
+`r names(training)[1:7]`,
+
+I removed these from the data set since they were not relevant towards predicting "classe".  The removed variables included the time stamp ones as well,  since I did not 
+inted to do a time series analysis.
+
+```{r}
+training <- training[,-c(1,2,3,4,5,6,7)]
+
+```
+
+Next, I removed all the columns with missing values from the dataset: 
+
+```{r}
+training <-training[,colSums(is.na(training))==0]
+```
+
+Then, I found all the columns that are factors, while ignoring the last column which was the response variable "classe."
+
+```{r}
+col_names <- c()
+n <- ncol(training)-1
+for (i in 1:n) {
+     if (is.factor(training[,i])){
+             col_names <- c(col_names,i)
+           }
+}
+```
+
+I then removed these columns from the data frame, since some of the machine learning algorithms cannot work with factor variables that have over 32 levels.  
+
+
+```{r}
+training <- training[,-col_names]
+```
+
+Overall, I have reduced the number of predictive variables from `r 159` to `r ncol(training) - 1 `. 
+
+
+
+##Modeling
+
+###Random Forests
+
+```{r}
+library(caret); library(randomForest)
+set.seed(123355)     
+trainIndex <- createDataPartition(y=training$classe, p=0.75, list=FALSE)
+trainingSet<- training[trainIndex,]
+testingSet<- training[-trainIndex,]
+modelFit <-randomForest(classe ~., data = trainingSet, importance = TRUE)
+print(modelFit)
+#str(modelFit$importance)
+prediction <- predict(modelFit, testingSet)
+testingSet$rightPred <- prediction == testingSet$classe
+
+accuracy <- sum(testingSet$rightPred)/nrow(testingSet)
+accuracy 
+
+```
+
+In order to find the most important of the predictors, let's look at **modelFit$importance**.
+Random forests has four different ways of looking at variable importance. See: https://www.stat.berkeley.edu/~breiman/Using_random_forests_v4.0.pdf
+
+```{r}
+importants <- c()
+for (i in 1:4){
+        #print(str(modelFit$importance[,i]))
+        x <- sort(modelFit$importance[,i], dec = TRUE)
+        #print(x)
+        y=modelFit$importance[,i]
+        #plot(x, main = paste("Measure in Decreasing Order", i), ylab="Importance")
+        #plot(x[1:10], type = "h", main=paste("Measure",i, "Of the top 10"), ylab = "Importance")
+        plot(y, main = paste("Measure", i), ylab="Importance")
+        abline(h=0.075,col="green",lty=3, lwd = 2)
+        importants <- c(importants, names(y[y>.075]))
+        print(names(y[y>.075]))
+}
+sort(importants, dec = TRUE)
+importants<-unique(importants)
+importants
+```
+
+So, let's fit a model using only the "important" predictors and guestimate its accuracy by trying it out on the test set.   
+
+
+
+```{r}
+smallerModelFit <-randomForest(classe ~ roll_belt + pitch_belt + yaw_belt +
+                magnet_dumbbell_x+magnet_dumbbell_y+magnet_dumbbell_z
+                + roll_forearm + pitch_forearm + roll_dumbbell + 
+                 accel_dumbbell_y + accel_forearm_x,
+                               data = trainingSet, importance = TRUE)
+print(smallerModelFit)
+smallerPrediction <- predict(smallerModelFit, testingSet)
+testingSet$smallerRightPred <- smallerPrediction == testingSet$classe
+t<-table(smallerPrediction, testingSet$classe)
+t
+accuracy <- sum(testingSet$smallerRightPred)/nrow(testingSet)
+accuracy  
+```
+
+Hmmm, would a single decision tree work just as well as using random forests?
+Let's see!
+
+###Decision Trees
+
+```{r}
+library(rpart)
+set.seed(1976)
+treeModel <- rpart(classe ~ roll_belt + pitch_belt + yaw_belt +magnet_dumbbell_x
+                   +magnet_dumbbell_y+magnet_dumbbell_z + roll_forearm + 
+                pitch_forearm + roll_dumbbell + accel_dumbbell_y + accel_forearm_x,
+                   method="class", data=trainingSet)
+
+printcp(treeModel) # display the results 
+plotcp(treeModel) # visualize cross-validation results 
+#summary(treeModel) # detailed summary of splits
+# plot tree 
+plot(treeModel, uniform=TRUE, 
+     main="Classification Tree for Weight Lifting Exercises Dataset")
+text(treeModel, use.n=TRUE, all=TRUE, cex=.45)
+```
+
+So, how accurate is this classification tree on the testing set? Let's see:
+
+```{r}
+treePredValues <- predict(treeModel, testingSet)
+treePrediction <- c()
+for (k in 1:nrow(testingSet)) {
+        treePrediction <- c(treePrediction, names(which.max(treePredValues[k,])))
+}
+testingSet$treeRightPred <-treePrediction == testingSet$classe
+t<-table(treePrediction, testingSet$classe)
+t
+accuracy <- sum(testingSet$treeRightPred)/nrow(testingSet)
+accuracy  
+
+```
+
