@@ -1,0 +1,122 @@
+---
+title: "Bike Share Demand"
+author: "Kinga"
+date: "Thursday, February 26, 2015"
+output: html_document
+---
+##Reading in the data
+
+```{r}
+df <- read.csv("train.csv")
+```
+
+
+##Examininig the data
+
+```{r}
+head(df)
+str(df$datetime)
+tail(df)
+nrow(df)
+names(df)
+```
+
+##Preparing the data
+
+####Taking care of the missing rows
+
+
+```{r}
+#Finding the missing rows:
+library(lubridate)
+class(df$datetime)
+df$datetime <- ymd_hms(df$datetime)
+class(df$datetime)
+head(df$datetime)
+problemRows <- c()
+#gap <- list()
+for (i in 2:nrow(df)){
+        if (as.numeric(df$datetime[i]-df$datetime[i-1])>1 ) {
+                problemRows <- c(problemRows,i)
+                #gap[[i]]<-(df$datetime[i]-df$datetime[i-1])
+        }
+}
+problemRows
+#finding the gap at the problem rows
+gap <- list()
+
+for (i in problemRows){
+        #print(i)
+        gap[[as.character(i)]]<-(df$datetime[i]-df$datetime[i-1])
+        
+}
+gap[[1]]
+gap[[2]]
+head(gap, length(problemRows))
+
+```
+
+####Splitting up the "datetime" column into its components
+
+```{r}
+library(dplyr); 
+splitChar1 <- function(x){ strsplit(as.character(x), " ")[[1]][1]}  
+date <- sapply(df[,1], splitChar1)
+df$theDate <- date
+class(df$theDate)  #checking its class
+splitChar2 <- function(x){ strsplit(as.character(x), " ")[[1]][2]}
+df$theTime <- sapply(df[,1], splitChar2)
+df$theDate<-as.Date(df$theDate)  #changing from character class to Date class
+df$theDay <- weekdays(df$theDate) #creating a weekday column
+df$theMonth <- months(df$theDate) #creating a month column
+df$theYear <- year(df$theDate)  #creating a year column
+class(df$theYear)
+df$theDayth <- day(df$theDate)  #creating the day of the month column (i.e 4th or 21st etc.)
+
+```
+
+So the new look of the data frame is:
+
+```{r}
+head(df)
+```
+
+
+####Creating monthly dataframes
+
+```{r}
+monthsVector <- c("January", "February", "March", "April", "May", "June", "July",
+                     "August", "September", "October", "November", "December")
+dfList <- list(1:12)
+n <- 1
+
+for (j in monthsVector) {
+    dfList[[n]] <- filter(df,theMonth == j)
+    n<-n+1
+    }
+
+
+head(dfList[[1]])
+head(dfList[[12]])
+```
+
+
+##Exploring the data
+
+
+####Monthly time series graphs
+
+```{r}
+dummyDF<-dfList[[1]]
+#dummyDF
+nrow(dummyDF)
+a <- ts(dummyDF$count, frequency = 19*24)
+#print(a)
+attributes(a)
+#f <- decompose(a, type="multiplicative")
+plot(a)
+plot(dummyDF$count, type="b")
+b <- ts(df$count, frequency=1)
+plot(b)
+#g <- decompose(b)
+```
