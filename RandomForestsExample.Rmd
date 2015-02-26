@@ -1,0 +1,141 @@
+---
+title: "Data Prediction Using Random Forests in R"
+author: "Kinga"
+date: "Thursday, January 29, 2015"
+output: html_document
+---
+
+
+
+##About the Data 
+The data for this example is the Weight Lifting Exercises Dataset from http://groupware.les.inf.puc-rio.br/har.  
+This is their description of the data they collected:
+'The approach we propose for the Weight Lifting Exercises dataset is to investigate "how (well)" an activity was performed by the wearer. The "how (well)" investigation has only received little attention so far, even though it potentially provides useful information for a large variety of applications,such as sports training. ...  
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience. We made sure that all participants could easily simulate the mistakes in a safe and controlled manner by using a relatively light dumbbell (1.25kg).'
+
+
+
+##Getting the Data
+
+
+         dataFrame <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+
+
+
+##Exploring the Data 
+
+        names(dataFrame)
+        attach(dataFrame)
+        tail(names(dataFrame),24)
+
+The response variable is "classe" and the rest of the variables are all potential
+predictors of this response variable.   To get an idea of the size of this dataset, here are some basic numbers: 
+
+        ncol(dataFrame)  #the number of variables
+        nrow(dataFrame)  #the number of observations
+
+In order to have some idea of what the response variable looks like, here is the
+summary of it:
+
+        summary(classe)
+
+After some further examination of the dataset, there are a few things I need to note:
+
+**1.** Some of the values are missing, as in the column "skewness_yaw_belt" and some of the values are "NA", as in the column "max_roll_belt":  
+
+        head(dataFrame[,c(16,17,18)])
+        
+**2.** Some of the variables are factor variables with over `r 100` factors:
+
+        is.factor(kurtosis_roll_belt)
+        str(kurtosis_roll_belt)
+
+##Plotting the Data
+
+In order to best determine which model to choose to predict "classe", I chose to 
+graph some of the predictors in a feature plot.
+
+        library(ggplot2); library(caret)
+        
+        #selecting a few of the more promising predictors to be plotted
+        colSelection<- c("roll_belt","pitch_belt", "yaw_belt", "roll_arm", "pitch_arm", "yaw_arm")
+
+        #creating a feature plot 
+        featurePlot(x=dataFrame[,colSelection], y = classe, plot="pairs")
+        
+In order to closer examine the feature plot, I plotted many of them separately, here is an example of a close-up:
+
+        qplot(roll_belt, roll_forearm, colour=classe, data=training)
+        
+In order to understand what is going with the strange groupings on I created a histogram of "roll_belt" and  of "roll_forearm":
+
+        par(mfrow=c(1,2))
+        hist(roll_belt, main = "roll_belt")
+        hist(roll_forearm, main="roll_forearm")
+  
+  
+##Preprocessing the Data
+
+The first 7 variables in the training data set are:
+
+        names(dataFrame)[1:7]
+
+I removed these from the data set since they were not relevant towards predicting "classe".  The removed variables included the time stamp ones as well,  since I did not 
+inted to do a time series analysis.
+
+        dataFrame <- dataFrame[,-c(1,2,3,4,5,6,7)]  
+      
+Next, I removed all the columns with missing values from the dataset: 
+
+        dataFrame <-dataFrame[,colSums(is.na(dataFrame))==0]
+        
+Then, I found all the columns that are factors, while ignoring the last column which was the response variable "classe."
+
+        col_names <- c()
+        n <- ncol(dataFrame)-1
+        for (i in 1:n) {
+                if (is.factor(dataFrame[,i])){
+                col_names <- c(col_names,i)
+           }
+        }
+        
+I then removed these columns from the data frame, since some of the machine learning algorithms in R cannot work with factor variables that have over 32 levels. 
+
+        dataFrame <- dataFrame[,-col_names]
+        
+Overall, I have reduced the number of predictive variables from `r 159` to 
+
+         ncol(dataFrame) - 1  
+         
+         
+##Cross Validation Using Random Subsampling and Random Forest
+
+I used a for loop to set up cross validation using random subsampling to fit three 
+random forest models to random subsets of the training data, called "trainingSet". I then used these models to predict the "classe" variable of the testing subsets, called "testingSet".   I was hoping for an out of sample error of less than 20%.  
+
+        library(randomForest)
+        first_seed <- 123355
+        accuracies <-c()
+        for (i in 1:3){
+                set.seed(first_seed)
+                first_seed <- first_seed+1
+                trainIndex <- createDataPartition(y=dataFrame$classe, p=0.75, list=FALSE)
+                trainingSet<- dataFrame[trainIndex,]
+                testingSet<- dataFrame[-trainIndex,]
+                modelFit <- randomForest(classe ~., data = trainingSet)
+                prediction <- predict(modelFit, testingSet)
+                testingSet$rightPred <- prediction == testingSet$classe
+                t<-table(prediction, testingSet$classe) #creating a confusion matrix
+                print(t)
+                accuracy <- sum(testingSet$rightPred)/nrow(testingSet)
+                accuracies <- c(accuracies,accuracy)
+                print(accuracy)
+        }
+        accuracies #printing the accuracies of the three models
+        mean(accuracies) #finding the average of the accuracies
+        
+The mean accuracy of these models is a good estimate of the out of sample error of 
+the random forest model I just created.   
